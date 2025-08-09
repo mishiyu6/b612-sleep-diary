@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>🌙 B612 睡眠日記</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <meta name="theme-color" content="#3d3d99">
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
@@ -95,11 +97,13 @@
       color: #333;
       border-radius: 8px;
       font-size: 0.9em;
+      white-space: pre-line;
     }
     #sleepStats {
       margin-top: 20px;
       font-size: 1em;
       color: #ffd3e0;
+      white-space: pre-line;
     }
     @media (max-width: 600px) {
       body {
@@ -185,6 +189,29 @@
 let sleepRecords = JSON.parse(localStorage.getItem("sleepRecords") || "[]");
 let currentSleepStart = null;
 
+function formatDate(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function formatTime(date) {
+  return date.toTimeString().slice(0, 5);
+}
+
+function calcDuration(sleep, wake) {
+  let diffMs = wake - sleep;
+  if (diffMs < 0) diffMs += 24 * 3600000;
+
+  const totalMinutes = Math.round(diffMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${String(hours).padStart(2, "0")}小時${String(minutes).padStart(2, "0")}分`;
+}
+
+function log(msg) {
+  document.getElementById("log").textContent = msg;
+}
+
 function saveRecords() {
   localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
   renderTable();
@@ -225,23 +252,6 @@ function endSleep() {
   log(`🌞 起床時間記錄為 ${formatTime(wakeTime)}，已儲存紀錄`);
 }
 
-function formatDate(date) {
-  return date.toISOString().split("T")[0];
-}
-
-function formatTime(date) {
-  return date.toTimeString().slice(0, 5);
-}
-
-function calcDuration(sleep, wake) {
-  const diff = (wake - sleep) / 3600000;
-  return (diff < 0 ? diff + 24 : diff).toFixed(2);
-}
-
-function log(msg) {
-  document.getElementById("log").textContent = msg;
-}
-
 function renderTable() {
   const tbody = document.getElementById("sleepTableBody");
   tbody.innerHTML = "";
@@ -251,7 +261,7 @@ function renderTable() {
       <td>${r.date}</td>
       <td onclick="editTime(${i}, 'sleep')">${r.sleep}</td>
       <td onclick="editTime(${i}, 'wake')">${r.wake}</td>
-      <td>${r.duration} 小時</td>
+      <td>${r.duration}</td>
       <td><button onclick="deleteRecord(${i})">🗑</button></td>
     `;
     tbody.appendChild(row);
@@ -278,9 +288,72 @@ function deleteRecord(index) {
 }
 
 function renderStats() {
-  const total = sleepRecords.reduce((sum, r) => sum + parseFloat(r.duration), 0);
-  const avg = (total / sleepRecords.length).toFixed(2);
-  document.getElementById("sleepStats").textContent = `📊 平均睡眠時數：${avg} 小時（共 ${sleepRecords.length} 筆）`;
+  let totalMinutes = 0;
+  let maxMinutes = 0;
+  let minMinutes = Infinity;
+  let maxRecord = null;
+  let minRecord = null;
+
+  let good = 0, ok = 0, poor = 0;
+
+  const now = new Date();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(now.getDate() - 6);
+
+  let weekTotalMinutes = 0;
+  let weekCount = 0;
+
+  sleepRecords.forEach(r => {
+    const match = r.duration.match(/(\d+)小時(\d+)分/);
+    if (match) {
+      const hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const total = hours * 60 + minutes;
+
+      totalMinutes += total;
+
+      if (total > maxMinutes) {
+        maxMinutes = total;
+        maxRecord = r;
+      }
+      if (total < minMinutes) {
+        minMinutes = total;
+        minRecord = r;
+      }
+
+      if (total >= 480) good++;
+      else if (total >= 360) ok++;
+      else poor++;
+
+      const recordDate = new Date(r.date);
+      if (recordDate >= sevenDaysAgo && recordDate <= now) {
+        weekTotalMinutes += total;
+        weekCount++;
+      }
+    }
+  });
+
+  const avgMinutes = sleepRecords.length ? Math.round(totalMinutes / sleepRecords.length) : 0;
+  const avgHours = Math.floor(avgMinutes / 60);
+  const avgRemainMinutes = avgMinutes % 60;
+
+  let statsText = `📊 平均睡眠時數：${String(avgHours).padStart(2, "0")}小時${String(avgRemainMinutes).padStart(2, "0")}分（共 ${sleepRecords.length} 筆）`;
+
+  if (maxRecord && minRecord) {
+    statsText += `\n🌟 最長：${maxRecord.duration}（${maxRecord.date}）`;
+    statsText += `\n🌑 最短：${minRecord.duration}（${minRecord.date}）`;
+  }
+
+  if (weekCount > 0) {
+    const weekAvg = Math.round(weekTotalMinutes / weekCount);
+    const weekHours = Math.floor(weekAvg / 60);
+    const weekMinutes = weekAvg % 60;
+    statsText += `\n🗓 最近 7 天平均：${String(weekHours).padStart(2, "0")}小時${String(weekMinutes).padStart(2, "0")}分`;
+  }
+
+  statsText += `\n🧠 睡眠品質分布：🟢${good} 🟡${ok} 🔴${poor}`;
+
+  document.getElementById("sleepStats").textContent = statsText;
 }
 
 function addManualRecord() {
@@ -305,7 +378,7 @@ function addManualRecord() {
 
 function exportAllData() {
   const blob = new Blob([JSON.stringify(sleepRecords, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
+  const url = URL.createObjectObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = "sleep_backup.json";
@@ -333,6 +406,7 @@ function handleBackupFile(event) {
   };
   reader.readAsText(file);
 }
+
 function renderCalendar() {
   const grid = document.getElementById("calendarGrid");
   grid.innerHTML = "";
@@ -352,13 +426,18 @@ function renderCalendar() {
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const duration = recordsByDate[dateStr];
     const cell = document.createElement("div");
-    cell.textContent = `${d}日${duration ? `\n${duration}h` : ""}`;
+    cell.textContent = `${d}日${duration ? `\n${duration}` : ""}`;
     if (duration) {
-      const hours = parseFloat(duration);
-      cell.style.backgroundColor =
-        hours >= 8 ? "#c6f6d5" :
-        hours >= 6 ? "#fefcbf" :
-        "#feb2b2";
+      const match = duration.match(/(\d+)小時(\d+)分/);
+      if (match) {
+        const hours = parseInt(match[1], 10);
+        cell.style.backgroundColor =
+          hours >= 8 ? "#c6f6d5" :
+          hours >= 6 ? "#fefcbf" :
+          "#feb2b2";
+        cell.textContent += `\n${hours >= 8 ? "🟢" : hours >= 6 ? "🟡" : "🔴"}`;
+        cell.title = `睡眠品質：${hours >= 8 ? "很好" : hours >= 6 ? "普通" : "不佳"}`;
+      }
     }
     grid.appendChild(cell);
   }
@@ -414,50 +493,10 @@ function showRandomQuote() {
   document.getElementById("quoteDisplay").textContent = quote;
 }
 
-setInterval(showRandomQuote, 8000);
-showRandomQuote();
-
-let deferredPrompt;
-const installBtn = document.createElement("button");
-installBtn.textContent = "📲 加入主畫面";
-installBtn.style = `
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  padding: 10px 16px;
-  font-size: 1em;
-  border-radius: 12px;
-  border: none;
-  background-color: #ffd3e0;
-  color: #333;
-  cursor: pointer;
-  z-index: 9999;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  display: none;
-`;
-
-document.body.appendChild(installBtn);
-
-window.addEventListener("beforeinstallprompt", (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  installBtn.style.display = "block";
-});
-
-installBtn.addEventListener("click", () => {
-  installBtn.style.display = "none";
-  if (deferredPrompt) {
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then((choiceResult) => {
-      if (choiceResult.outcome === "accepted") {
-        console.log("✅ 使用者接受安裝");
-      } else {
-        console.log("❌ 使用者拒絕安裝");
-      }
-      deferredPrompt = null;
-    });
-  }
-});
+window.onload = () => {
+  showRandomQuote();
+  saveRecords();
+};
 </script>
 </body>
 </html>
