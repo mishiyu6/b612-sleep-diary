@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>🌙 B612 睡眠日記</title>
+  <link rel="manifest" href="manifest.json">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log("✅ Service Worker 已註冊"))
+        .catch(err => console.error("❌ Service Worker 註冊失敗", err));
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+      background: linear-gradient(to bottom, #1a1a60, #3d3d99);
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 0.2em;
+    }
+    .quote {
+      font-style: italic;
+      color: #ffd3e0;
+      margin-bottom: 20px;
+      min-height: 2em;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin: 10px;
+      border-radius: 12px;
+      border: none;
+      background-color: #ffcc99;
+      color: #333;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #ffe6cc;
+    }
+    input[type="date"],
+    input[type="time"],
+    input[type="checkbox"] {
+      padding: 6px;
+      margin: 5px;
+      border-radius: 8px;
+      border: none;
+      font-size: 1em;
+    }
+    #log {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      font-size: 1em;
+    }
+    table {
+      margin: 30px auto;
+      width: 100%;
+      max-width: 600px;
+      border-collapse: collapse;
+      background-color: white;
+      color: #333;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      font-size: 0.95em;
+    }
+    th {
+      background-color: #ffd3e0;
+    }
+    td[onclick] {
+      cursor: pointer;
+      text-decoration: underline;
+      color: #1a1a60;
+    }
+    footer {
+      margin-top: 30px;
+      font-size: 1em;
+      color: #f0f0f0;
+    }
+    #calendarGrid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      margin-top: 20px;
+    }
+    #calendarGrid div {
+      padding: 10px;
+      background: #fff;
+      color: #333;
+      border-radius: 8px;
+      font-size: 0.9em;
+    }
+    #sleepStats {
+      margin-top: 20px;
+      font-size: 1em;
+      color: #ffd3e0;
+    }
+    @media (max-width: 600px) {
+      body {
+        padding: 10px;
+        font-size: 0.95em;
+      }
+      table, th, td {
+        font-size: 0.85em;
+        padding: 6px;
+      }
+      button {
+        font-size: 0.9em;
+        padding: 8px 16px;
+      }
+      #calendarGrid {
+        grid-template-columns: repeat(7, 1fr);
+        gap: 6px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>🌙 B612 睡眠日記</h1>
+  <p class="quote" id="quoteDisplay">🦊 星語載入中...</p>
+
+  <button onclick="startSleep()">🪐 小王子去旅行</button>
+  <button onclick="endSleep()">🌞 他回到星球</button>
+  <button onclick="exportAllData()">📦 匯出備份 (JSON)</button>
+  <input type="file" id="backupFileInput" accept=".json" style="display:none" onchange="handleBackupFile(event)">
+  <button onclick="document.getElementById('backupFileInput').click()">🪄 還原備份 (JSON)</button>
+
+  <label style="display:block; margin-top:20px;">
+    <input type="checkbox" id="autoShiftDate" checked>
+    🕒 凌晨入睡時自動提示是否歸前一天
+  </label>
+
+  <div id="log"></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>📅 日期</th>
+        <th>🌙 睡覺時間</th>
+        <th>🌞 起床時間</th>
+        <th>🪐 睡眠時數</th>
+        <th>🗑 刪除</th>
+      </tr>
+    </thead>
+    <tbody id="sleepTableBody"></tbody>
+  </table>
+
+  <div id="sleepStats"></div>
+
+  <h2 style="margin-top:40px;">📚 歷史睡眠時間</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>🗑 刪除</th>
+        <th>📅 日期</th>
+        <th>🌙 睡覺時間</th>
+        <th>🌞 起床時間</th>
+        <th>🪐 睡眠時數</th>
+      </tr>
+    </thead>
+    <tbody id="historyTableBody"></tbody>
+  </table>
+  <button onclick="deleteSelectedHistory()">🧹 刪除選取紀錄</button>
+  <button onclick="exportHistoryCSV()">📄 匯出歷史紀錄 (CSV)</button>
+
+  <div id="manualEntry">
+    <h2>✍️ 手動新增睡眠紀錄</h2>
+    <input type="date" id="manualDate">
+    <input type="time" id="manualSleep">
+    <input type="time" id="manualWake">
+    <button onclick="addManualRecord()">➕ 新增紀錄</button>
+  </div>
+
+  <div id="calendar">
+    <h2>📅 本月睡眠一覽</h2>
+    <div id="calendarGrid"></div>
+  </div>
+<script>
+let sleepRecords = JSON.parse(localStorage.getItem("sleepRecords") || "[]");
+let currentSleepStart = null;
+
+function saveRecords() {
+  localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
+  renderTable();
+  renderStats();
+  renderCalendar();
+}
+
+function startSleep() {
+  currentSleepStart = new Date();
+  log(`🪐 睡覺時間記錄為 ${formatTime(currentSleepStart)}`);
+}
+
+function endSleep() {
+  if (!currentSleepStart) {
+    alert("請先記錄睡覺時間！");
+    return;
+  }
+  const wakeTime = new Date();
+  const sleepTime = new Date(currentSleepStart);
+  const sleepDate = new Date(sleepTime);
+  const autoShift = document.getElementById("autoShiftDate").checked;
+
+  if (autoShift && sleepTime.getHours() < 6) {
+    sleepDate.setDate(sleepDate.getDate() - 1);
+    const confirmShift = confirm("是否將睡眠歸屬於前一天？");
+    if (!confirmShift) sleepDate.setDate(sleepDate.getDate() + 1);
+  }
+
+  const record = {
+    date: formatDate(sleepDate),
+    sleep: formatTime(sleepTime),
+    wake: formatTime(wakeTime),
+    duration: calcDuration(sleepTime, wakeTime)
+  };
+  sleepRecords.push(record);
+  currentSleepStart = null;
+  saveRecords();
+  log(`🌞 起床時間記錄為 ${formatTime(wakeTime)}，已儲存紀錄`);
+}
+
+function formatDate(date) {
+  return date.toISOString().split("T")[0];
+}
+
+function formatTime(date) {
+  return date.toTimeString().slice(0, 5);
+}
+
+function calcDuration(sleep, wake) {
+  const diff = (wake - sleep) / 3600000;
+  return (diff < 0 ? diff + 24 : diff).toFixed(2);
+}
+
+function log(msg) {
+  document.getElementById("log").textContent = msg;
+}
+
+function renderTable() {
+  const tbody = document.getElementById("sleepTableBody");
+  tbody.innerHTML = "";
+  sleepRecords.forEach((r, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${r.date}</td>
+      <td onclick="editTime(${i}, 'sleep')">${r.sleep}</td>
+      <td onclick="editTime(${i}, 'wake')">${r.wake}</td>
+      <td>${r.duration} 小時</td>
+      <td><button onclick="deleteRecord(${i})">🗑</button></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function editTime(index, field) {
+  const newTime = prompt(`請輸入新的 ${field === "sleep" ? "睡覺" : "起床"}時間 (HH:mm)：`, sleepRecords[index][field]);
+  if (newTime && /^\d{2}:\d{2}$/.test(newTime)) {
+    sleepRecords[index][field] = newTime;
+    const sleep = new Date(`${sleepRecords[index].date}T${sleepRecords[index].sleep}`);
+    const wake = new Date(`${sleepRecords[index].date}T${sleepRecords[index].wake}`);
+    if (wake < sleep) wake.setDate(wake.getDate() + 1);
+    sleepRecords[index].duration = calcDuration(sleep, wake);
+    saveRecords();
+  }
+}
+
+function deleteRecord(index) {
+  if (confirm("確定要刪除這筆紀錄嗎？")) {
+    sleepRecords.splice(index, 1);
+    saveRecords();
+  }
+}
+
+function renderStats() {
+  const total = sleepRecords.reduce((sum, r) => sum + parseFloat(r.duration), 0);
+  const avg = (total / sleepRecords.length).toFixed(2);
+  document.getElementById("sleepStats").textContent = `📊 平均睡眠時數：${avg} 小時（共 ${sleepRecords.length} 筆）`;
+}
+
+function addManualRecord() {
+  const date = document.getElementById("manualDate").value;
+  const sleep = document.getElementById("manualSleep").value;
+  const wake = document.getElementById("manualWake").value;
+  if (!date || !sleep || !wake) {
+    alert("請填寫完整資料！");
+    return;
+  }
+  const sleepTime = new Date(`${date}T${sleep}`);
+  const wakeTime = new Date(`${date}T${wake}`);
+  if (wakeTime < sleepTime) wakeTime.setDate(wakeTime.getDate() + 1);
+  sleepRecords.push({
+    date,
+    sleep,
+    wake,
+    duration: calcDuration(sleepTime, wakeTime)
+  });
+  saveRecords();
+}
+
+function exportAllData() {
+  const blob = new Blob([JSON.stringify(sleepRecords, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sleep_backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleBackupFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data)) {
+        sleepRecords = data;
+        saveRecords();
+        alert("✅ 備份已還原！");
+      } else {
+        alert("❌ 格式錯誤！");
+      }
+    } catch {
+      alert("❌ 無法解析備份檔！");
+    }
+  };
+  reader.readAsText(file);
+}
+function renderCalendar() {
+  const grid = document.getElementById("calendarGrid");
+  grid.innerHTML = "";
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const recordsByDate = {};
+  sleepRecords.forEach(r => {
+    if (r.date.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)) {
+      recordsByDate[r.date] = r.duration;
+    }
+  });
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const duration = recordsByDate[dateStr];
+    const cell = document.createElement("div");
+    cell.textContent = `${d}日${duration ? `\n${duration}h` : ""}`;
+    if (duration) {
+      const hours = parseFloat(duration);
+      cell.style.backgroundColor =
+        hours >= 8 ? "#c6f6d5" :
+        hours >= 6 ? "#fefcbf" :
+        "#feb2b2";
+    }
+    grid.appendChild(cell);
+  }
+}
+
+function exportHistoryCSV() {
+  let csv = "日期,睡覺時間,起床時間,睡眠時數\n";
+  sleepRecords.forEach(r => {
+    csv += `${r.date},${r.sleep},${r.wake},${r.duration}\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sleep_history.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function deleteSelectedHistory() {
+  const confirmDelete = confirm("確定要刪除所有紀錄嗎？此操作無法復原！");
+  if (confirmDelete) {
+    sleepRecords = [];
+    saveRecords();
+  }
+}
+
+const quotes = [
+  "🌌 星星之所以閃爍，是因為有人正在仰望。",
+  "🦊 最重要的事，用眼睛是看不見的。",
+  "🌙 睡眠是靈魂的柔軟棉被。",
+  "🪐 小王子說：『請好好照顧你的星球。』",
+  "💤 你值得一場深沉而溫柔的睡眠。",
+  "🌠 每個夜晚，都是心靈的重啟儀式。",
+  "🧸 睡前的安靜，是給自己最好的禮物。",
+  "🌈 明天的你，會感謝今晚好好休息的自己。",
+  "🌻 即使今天很累，也請記得你已經很努力了。",
+  "🌙 月亮不會催你入睡，但她一直在守護你。",
+  "🪞 睡前放下所有角色，你只需要做自己。",
+  "🌌 夢境是心靈的語言，請溫柔傾聽它。",
+  "🧭 迷路也沒關係，星星會指引方向。",
+  "🫧 呼吸、放鬆、沉入夜的懷抱。",
+  "🦢 安靜的夜晚，是心靈最好的療癒師。",
+  "🌸 睡眠不是逃避，而是重生的入口。",
+  "🪺 你的小宇宙，今晚也值得被好好照顧。",
+  "🌃 黑夜不代表結束，它是另一種開始。",
+  "🧶 每一場夢，都是你心中未說完的故事。",
+  "🫖 放下焦慮，泡一壺安心的夢給自己。"
+];
+
+function showRandomQuote() {
+  const quote = quotes[Math.floor(Math.random() * quotes.length)];
+  document.getElementById("quoteDisplay").textContent = quote;
+}
+
+setInterval(showRandomQuote, 8000);
+showRandomQuote();
+</script>
+</body>
+</html>
