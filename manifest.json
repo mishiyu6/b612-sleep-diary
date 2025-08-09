@@ -1,0 +1,21 @@
+{
+  "name": "B612 睡眠日記",
+  "short_name": "B612",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1a1a60",
+  "theme_color": "#3d3d99",
+  "description": "小王子的睡眠紀錄工具，支援跨日、備份、統計與月曆視圖。",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
