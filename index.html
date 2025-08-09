@@ -416,6 +416,48 @@ function showRandomQuote() {
 
 setInterval(showRandomQuote, 8000);
 showRandomQuote();
+
+let deferredPrompt;
+const installBtn = document.createElement("button");
+installBtn.textContent = "📲 加入主畫面";
+installBtn.style = `
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  padding: 10px 16px;
+  font-size: 1em;
+  border-radius: 12px;
+  border: none;
+  background-color: #ffd3e0;
+  color: #333;
+  cursor: pointer;
+  z-index: 9999;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  display: none;
+`;
+
+document.body.appendChild(installBtn);
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = "block";
+});
+
+installBtn.addEventListener("click", () => {
+  installBtn.style.display = "none";
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === "accepted") {
+        console.log("✅ 使用者接受安裝");
+      } else {
+        console.log("❌ 使用者拒絕安裝");
+      }
+      deferredPrompt = null;
+    });
+  }
+});
 </script>
 </body>
 </html>
