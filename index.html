@@ -80,11 +80,6 @@
       text-decoration: underline;
       color: #1a1a60;
     }
-    footer {
-      margin-top: 30px;
-      font-size: 1em;
-      color: #f0f0f0;
-    }
     #calendarGrid {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -141,7 +136,6 @@
   </label>
 
   <div id="log"></div>
-
   <table>
     <thead>
       <tr>
@@ -185,9 +179,17 @@
     <h2>📅 本月睡眠一覽</h2>
     <div id="calendarGrid"></div>
   </div>
+
 <script>
 let sleepRecords = JSON.parse(localStorage.getItem("sleepRecords") || "[]");
 let currentSleepStart = null;
+
+// 嘗試恢復跨日睡眠時間
+const savedStart = localStorage.getItem("currentSleepStart");
+if (savedStart) {
+  currentSleepStart = new Date(savedStart);
+  log(`🪐 睡覺時間已恢復：${formatTime(currentSleepStart)}（歸屬於 ${formatDate(currentSleepStart)}）`);
+}
 
 function formatDate(date) {
   return date.toISOString().split("T")[0];
@@ -200,27 +202,29 @@ function formatTime(date) {
 function calcDuration(sleep, wake) {
   let diffMs = wake - sleep;
   if (diffMs < 0) diffMs += 24 * 3600000;
-
   const totalMinutes = Math.round(diffMs / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-
   return `${String(hours).padStart(2, "0")}小時${String(minutes).padStart(2, "0")}分`;
 }
 
 function log(msg) {
   document.getElementById("log").textContent = msg;
-}
-
-function saveRecords() {
-  localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
-  renderTable();
-  renderStats();
-  renderCalendar();
+}function saveRecords() {
+  try {
+    localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
+    renderTable();
+    renderStats();
+    renderCalendar();
+    renderHistoryTable();
+  } catch (e) {
+    alert("❌ 儲存失敗，可能超過瀏覽器儲存上限！");
+  }
 }
 
 function startSleep() {
   currentSleepStart = new Date();
+  localStorage.setItem("currentSleepStart", currentSleepStart.toISOString());
   log(`🪐 睡覺時間記錄為 ${formatTime(currentSleepStart)}`);
 }
 
@@ -248,112 +252,9 @@ function endSleep() {
   };
   sleepRecords.push(record);
   currentSleepStart = null;
+  localStorage.removeItem("currentSleepStart");
   saveRecords();
-  log(`🌞 起床時間記錄為 ${formatTime(wakeTime)}，已儲存紀錄`);
-}
-
-function renderTable() {
-  const tbody = document.getElementById("sleepTableBody");
-  tbody.innerHTML = "";
-  sleepRecords.forEach((r, i) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${r.date}</td>
-      <td onclick="editTime(${i}, 'sleep')">${r.sleep}</td>
-      <td onclick="editTime(${i}, 'wake')">${r.wake}</td>
-      <td>${r.duration}</td>
-      <td><button onclick="deleteRecord(${i})">🗑</button></td>
-    `;
-    tbody.appendChild(row);
-  });
-}
-
-function editTime(index, field) {
-  const newTime = prompt(`請輸入新的 ${field === "sleep" ? "睡覺" : "起床"}時間 (HH:mm)：`, sleepRecords[index][field]);
-  if (newTime && /^\d{2}:\d{2}$/.test(newTime)) {
-    sleepRecords[index][field] = newTime;
-    const sleep = new Date(`${sleepRecords[index].date}T${sleepRecords[index].sleep}`);
-    const wake = new Date(`${sleepRecords[index].date}T${sleepRecords[index].wake}`);
-    if (wake < sleep) wake.setDate(wake.getDate() + 1);
-    sleepRecords[index].duration = calcDuration(sleep, wake);
-    saveRecords();
-  }
-}
-
-function deleteRecord(index) {
-  if (confirm("確定要刪除這筆紀錄嗎？")) {
-    sleepRecords.splice(index, 1);
-    saveRecords();
-  }
-}
-
-function renderStats() {
-  let totalMinutes = 0;
-  let maxMinutes = 0;
-  let minMinutes = Infinity;
-  let maxRecord = null;
-  let minRecord = null;
-
-  let good = 0, ok = 0, poor = 0;
-
-  const now = new Date();
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(now.getDate() - 6);
-
-  let weekTotalMinutes = 0;
-  let weekCount = 0;
-
-  sleepRecords.forEach(r => {
-    const match = r.duration.match(/(\d+)小時(\d+)分/);
-    if (match) {
-      const hours = parseInt(match[1], 10);
-      const minutes = parseInt(match[2], 10);
-      const total = hours * 60 + minutes;
-
-      totalMinutes += total;
-
-      if (total > maxMinutes) {
-        maxMinutes = total;
-        maxRecord = r;
-      }
-      if (total < minMinutes) {
-        minMinutes = total;
-        minRecord = r;
-      }
-
-      if (total >= 480) good++;
-      else if (total >= 360) ok++;
-      else poor++;
-
-      const recordDate = new Date(r.date);
-      if (recordDate >= sevenDaysAgo && recordDate <= now) {
-        weekTotalMinutes += total;
-        weekCount++;
-      }
-    }
-  });
-
-  const avgMinutes = sleepRecords.length ? Math.round(totalMinutes / sleepRecords.length) : 0;
-  const avgHours = Math.floor(avgMinutes / 60);
-  const avgRemainMinutes = avgMinutes % 60;
-
-  let statsText = `📊 平均睡眠時數：${String(avgHours).padStart(2, "0")}小時${String(avgRemainMinutes).padStart(2, "0")}分（共 ${sleepRecords.length} 筆）`;
-
-  if (maxRecord && minRecord) {
-    statsText += `\n🌟 最長：${maxRecord.duration}（${maxRecord.date}）`;
-    statsText += `\n🌑 最短：${minRecord.duration}（${minRecord.date}）`;
-  }
-
-  if (weekCount > 0) {
-    const weekAvg = Math.round(weekTotalMinutes / weekCount);
-    const weekHours = Math.floor(weekAvg / 60);
-    const weekMinutes = weekAvg % 60;
-    statsText += `\n🗓 最近 7 天平均：${String(weekHours).padStart(2, "0")}小時${String(weekMinutes).padStart(2, "0")}分`;
-  }
-
-  statsText += `\n🧠 睡眠品質分布：🟢${good} 🟡${ok} 🔴${poor}`;
-
-  document.getElementById("sleepStats").textContent = statsText;
+  log(`🌞 起床時間記錄為 ${formatTime(wakeTime)}，已儲存紀錄（歸屬於 ${record.date}）`);
 }
 
 function addManualRecord() {
@@ -374,11 +275,85 @@ function addManualRecord() {
     duration: calcDuration(sleepTime, wakeTime)
   });
   saveRecords();
+  log(`✅ 手動新增紀錄：${date} ${sleep} → ${wake}`);
+}
+
+function renderTable() {
+  const tbody = document.getElementById("sleepTableBody");
+  tbody.innerHTML = "";
+  const sorted = [...sleepRecords].sort((a, b) => new Date(b.date) - new Date(a.date));
+  sorted.forEach((r, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${r.date}</td>
+      <td onclick="editTime(${i}, 'sleep')">${r.sleep}</td>
+      <td onclick="editTime(${i}, 'wake')">${r.wake}</td>
+      <td>${r.duration}</td>
+      <td><button onclick="deleteRecord(${i})">🗑</button></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function renderHistoryTable() {
+  const tbody = document.getElementById("historyTableBody");
+  tbody.innerHTML = "";
+  sleepRecords.forEach((r, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><button onclick="deleteRecord(${i})">🗑</button></td>
+      <td>${r.date}</td>
+      <td>${r.sleep}</td>
+      <td>${r.wake}</td>
+      <td>${r.duration}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+function editTime(index, field) {
+  const newTime = prompt(`請輸入新的 ${field === "sleep" ? "睡覺" : "起床"}時間 (HH:mm)：`, sleepRecords[index][field]);
+  if (newTime && /^\d{2}:\d{2}$/.test(newTime)) {
+    sleepRecords[index][field] = newTime;
+    const sleep = new Date(`${sleepRecords[index].date}T${sleepRecords[index].sleep}`);
+    const wake = new Date(`${sleepRecords[index].date}T${sleepRecords[index].wake}`);
+    if (wake < sleep) wake.setDate(wake.getDate() + 1);
+    sleepRecords[index].duration = calcDuration(sleep, wake);
+    saveRecords();
+  }
+}
+
+function deleteRecord(index) {
+  if (confirm("確定要刪除這筆紀錄嗎？")) {
+    sleepRecords.splice(index, 1);
+    saveRecords();
+  }
+}
+
+function deleteSelectedHistory() {
+  const confirmDelete = confirm("確定要刪除所有紀錄嗎？此操作無法復原！");
+  if (confirmDelete) {
+    sleepRecords = [];
+    saveRecords();
+  }
+}
+
+function exportHistoryCSV() {
+  let csv = "日期,睡覺時間,起床時間,睡眠時數\n";
+  sleepRecords.forEach(r => {
+    csv += `${r.date},${r.sleep},${r.wake},${r.duration}\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sleep_history.csv";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function exportAllData() {
   const blob = new Blob([JSON.stringify(sleepRecords, null, 2)], { type: "application/json" });
-  const url = URL.createObjectObjectURL(blob);
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = "sleep_backup.json";
@@ -394,9 +369,12 @@ function handleBackupFile(event) {
     try {
       const data = JSON.parse(e.target.result);
       if (Array.isArray(data)) {
-        sleepRecords = data;
-        saveRecords();
-        alert("✅ 備份已還原！");
+        const confirmRestore = confirm("⚠️ 是否覆蓋現有紀錄並還原備份？此操作無法復原！");
+        if (confirmRestore) {
+          sleepRecords = data;
+          saveRecords();
+          alert("✅ 備份已還原！");
+        }
       } else {
         alert("❌ 格式錯誤！");
       }
@@ -435,33 +413,10 @@ function renderCalendar() {
           hours >= 8 ? "#c6f6d5" :
           hours >= 6 ? "#fefcbf" :
           "#feb2b2";
-        cell.textContent += `\n${hours >= 8 ? "🟢" : hours >= 6 ? "🟡" : "🔴"}`;
         cell.title = `睡眠品質：${hours >= 8 ? "很好" : hours >= 6 ? "普通" : "不佳"}`;
       }
     }
     grid.appendChild(cell);
-  }
-}
-
-function exportHistoryCSV() {
-  let csv = "日期,睡覺時間,起床時間,睡眠時數\n";
-  sleepRecords.forEach(r => {
-    csv += `${r.date},${r.sleep},${r.wake},${r.duration}\n`;
-  });
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "sleep_history.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function deleteSelectedHistory() {
-  const confirmDelete = confirm("確定要刪除所有紀錄嗎？此操作無法復原！");
-  if (confirmDelete) {
-    sleepRecords = [];
-    saveRecords();
   }
 }
 
@@ -495,6 +450,7 @@ function showRandomQuote() {
 
 window.onload = () => {
   showRandomQuote();
+  setInterval(showRandomQuote, 10000); // 每 10 秒換一句
   saveRecords();
 };
 </script>
