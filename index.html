@@ -210,16 +210,12 @@ function calcDuration(sleep, wake) {
 
 function log(msg) {
   document.getElementById("log").textContent = msg;
-}function saveRecords() {
-  try {
-    localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
-    renderTable();
-    renderStats();
-    renderCalendar();
-    renderHistoryTable();
-  } catch (e) {
-    alert("❌ 儲存失敗，可能超過瀏覽器儲存上限！");
-  }
+function saveRecords() {
+  localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
+  renderTable();
+  renderStats();
+  renderCalendar();
+  renderHistoryTable();
 }
 
 function startSleep() {
@@ -455,4 +451,5 @@ window.onload = () => {
 };
 </script>
 </body>
+
 </html>
