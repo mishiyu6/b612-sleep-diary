@@ -210,6 +210,8 @@ function calcDuration(sleep, wake) {
 
 function log(msg) {
   document.getElementById("log").textContent = msg;
+}
+
 function saveRecords() {
   localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
   renderTable();
@@ -217,7 +219,6 @@ function saveRecords() {
   renderCalendar();
   renderHistoryTable();
 }
-
 function startSleep() {
   currentSleepStart = new Date();
   localStorage.setItem("currentSleepStart", currentSleepStart.toISOString());
@@ -306,6 +307,7 @@ function renderHistoryTable() {
     tbody.appendChild(row);
   });
 }
+
 function editTime(index, field) {
   const newTime = prompt(`請輸入新的 ${field === "sleep" ? "睡覺" : "起床"}時間 (HH:mm)：`, sleepRecords[index][field]);
   if (newTime && /^\d{2}:\d{2}$/.test(newTime)) {
@@ -324,7 +326,6 @@ function deleteRecord(index) {
     saveRecords();
   }
 }
-
 function deleteSelectedHistory() {
   const confirmDelete = confirm("確定要刪除所有紀錄嗎？此操作無法復原！");
   if (confirmDelete) {
@@ -447,9 +448,11 @@ function showRandomQuote() {
 window.onload = () => {
   showRandomQuote();
   setInterval(showRandomQuote, 10000); // 每 10 秒換一句
-  saveRecords();
+  renderTable();
+  renderStats();
+  renderCalendar();
+  renderHistoryTable();
 };
 </script>
 </body>
-
 </html>
