@@ -212,6 +212,43 @@ function log(msg) {
   document.getElementById("log").textContent = msg;
 }
 
+function renderCalendar() {
+  const grid = document.getElementById("calendarGrid");
+  grid.innerHTML = "";
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const record = sleepRecords.find(r => r.date === dateStr);
+    const div = document.createElement("div");
+
+    let bgColor = "#eee"; // 預設灰色
+    let text = `${day}日\n—`;
+
+    if (record) {
+      text = `${day}日\n${record.duration}`;
+      const match = record.duration.match(/(\d+)小時(\d+)分/);
+      if (match) {
+        const hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const total = hours * 60 + minutes;
+
+        if (total >= 480) bgColor = "#c8f7c5";      // 淺綠
+        else if (total >= 360) bgColor = "#fff3b0";  // 淺黃
+        else bgColor = "#f7c5c5";                    // 淺紅
+      }
+    }
+
+    div.textContent = text;
+    div.style.backgroundColor = bgColor;
+    grid.appendChild(div);
+  }
+}
+
 function saveRecords() {
   localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
   renderTable();
@@ -382,41 +419,65 @@ function handleBackupFile(event) {
   reader.readAsText(file);
 }
 
-function renderCalendar() {
-  const grid = document.getElementById("calendarGrid");
-  grid.innerHTML = "";
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+function renderStats() {
+  let totalMinutes = 0;
+  let maxMinutes = 0;
+  let minMinutes = Infinity;
+  let maxRecord = null;
+  let minRecord = null;
+  let good = 0, ok = 0, poor = 0;
 
-  const recordsByDate = {};
+  const now = new Date();
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(now.getDate() - 6);
+
+  let weekTotalMinutes = 0;
+  let weekCount = 0;
+
   sleepRecords.forEach(r => {
-    if (r.date.startsWith(`${year}-${String(month + 1).padStart(2, "0")}`)) {
-      recordsByDate[r.date] = r.duration;
+    const match = r.duration.match(/(\d+)小時(\d+)分/);
+    if (match) {
+      const hours = parseInt(match[1], 10);
+      const minutes = parseInt(match[2], 10);
+      const total = hours * 60 + minutes;
+
+      totalMinutes += total;
+      if (total > maxMinutes) { maxMinutes = total; maxRecord = r; }
+      if (total < minMinutes) { minMinutes = total; minRecord = r; }
+
+      if (total >= 480) good++;
+      else if (total >= 360) ok++;
+      else poor++;
+
+      const recordDate = new Date(r.date);
+      if (recordDate >= sevenDaysAgo && recordDate <= now) {
+        weekTotalMinutes += total;
+        weekCount++;
+      }
     }
   });
 
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const duration = recordsByDate[dateStr];
-    const cell = document.createElement("div");
-    cell.textContent = `${d}日${duration ? `\n${duration}` : ""}`;
-    if (duration) {
-      const match = duration.match(/(\d+)小時(\d+)分/);
-      if (match) {
-        const hours = parseInt(match[1], 10);
-        cell.style.backgroundColor =
-          hours >= 8 ? "#c6f6d5" :
-          hours >= 6 ? "#fefcbf" :
-          "#feb2b2";
-        cell.title = `睡眠品質：${hours >= 8 ? "很好" : hours >= 6 ? "普通" : "不佳"}`;
-      }
-    }
-    grid.appendChild(cell);
-  }
-}
+  const avgMinutes = sleepRecords.length ? Math.round(totalMinutes / sleepRecords.length) : 0;
+  const avgHours = Math.floor(avgMinutes / 60);
+  const avgRemainMinutes = avgMinutes % 60;
 
+  let statsText = `📊 平均睡眠時數：${String(avgHours).padStart(2, "0")}小時${String(avgRemainMinutes).padStart(2, "0")}分（共 ${sleepRecords.length} 筆）`;
+
+  if (maxRecord && minRecord) {
+    statsText += `\n🌟 最長：${maxRecord.duration}（${maxRecord.date}）`;
+    statsText += `\n🌑 最短：${minRecord.duration}（${minRecord.date}）`;
+  }
+
+  if (weekCount > 0) {
+    const weekAvg = Math.round(weekTotalMinutes / weekCount);
+    const weekHours = Math.floor(weekAvg / 60);
+    const weekMinutes = weekAvg % 60;
+    statsText += `\n🗓 最近 7 天平均：${String(weekHours).padStart(2, "0")}小時${String(weekMinutes).padStart(2, "0")}分`;
+  }
+
+  statsText += `\n🧠 睡眠品質分布：🟢${good} 🟡${ok} 🔴${poor}`;
+  document.getElementById("sleepStats").textContent = statsText;
+}
 const quotes = [
   "🌌 星星之所以閃爍，是因為有人正在仰望。",
   "🦊 最重要的事，用眼睛是看不見的。",
