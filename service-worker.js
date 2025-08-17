@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sleep-diary-v3'; // ← 每次更新請改這個版本號
+const CACHE_NAME = 'sleep-diary-v4'; // ← 每次更新請改這個版本號
 const FILES_TO_CACHE = [
   '/',
   '/index.html',
@@ -44,4 +44,5 @@ self.addEventListener('fetch', event => {
       return response || fetch(event.request);
     })
   );
+
 });
