@@ -178,19 +178,19 @@
 
   <!-- 歷史紀錄 -->
   <h2 style="margin-top:40px;">📚 歷史睡眠時間</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>✏️ 編輯</th>
-        <th>🗑 刪除</th>
-        <th>📅 日期</th>
-        <th>🌙 睡覺時間</th>
-        <th>🌞 起床時間</th>
-        <th>🪐 睡眠時數</th>
-      </tr>
-    </thead>
-    <tbody id="historyTableBody"></tbody>
-  </table>
+  <!-- 睡眠紀錄表格 -->
+<table>
+  <thead>
+    <tr>
+      <th>📅 日期</th>
+      <th>🌙 睡覺時間</th>
+      <th>🌞 起床時間</th>
+      <th>🪐 睡眠時數</th>
+      <th>🗑 刪除</th>
+    </tr>
+  </thead>
+  <tbody id="sleepTableBody"></tbody>
+</table>
   <button onclick="deleteSelectedHistory()">🧹 刪除選取紀錄</button>
   <button onclick="exportHistoryCSV()">📄 匯出歷史紀錄 (CSV)</button>
 
@@ -227,7 +227,6 @@
  let sleepRecords = JSON.parse(localStorage.getItem("sleepRecords") || "[]");
 let currentSleepStart = null;
 
-// 嘗試恢復跨日睡眠時間
 const savedStart = localStorage.getItem("currentSleepStart");
 if (savedStart) {
   currentSleepStart = new Date(savedStart);
@@ -255,50 +254,52 @@ function log(msg) {
   document.getElementById("log").textContent = msg;
 }
 
-function renderCalendar() {
-  const grid = document.getElementById("calendarGrid");
-  grid.innerHTML = "";
+function renderTable() {
+  const tbody = document.getElementById("sleepTableBody");
+  tbody.innerHTML = "";
+  const sorted = [...sleepRecords].sort((a, b) => new Date(b.date) - new Date(a.date));
+  sorted.forEach((r) => {
+    const originalIndex = sleepRecords.indexOf(r);
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td onclick="editField(${originalIndex}, 'date')">${r.date}</td>
+      <td onclick="editField(${originalIndex}, 'sleep')">${r.sleep}</td>
+      <td onclick="editField(${originalIndex}, 'wake')">${r.wake}</td>
+      <td>${r.duration}</td>
+      <td><button onclick="deleteRecord(${originalIndex})">🗑</button></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+function editField(index, field) {
+  const labelMap = {
+    date: "日期 (YYYY-MM-DD)",
+    sleep: "睡覺時間 (HH:mm)",
+    wake: "起床時間 (HH:mm)"
+  };
+  const currentValue = sleepRecords[index][field];
+  const newValue = prompt(`請輸入新的 ${labelMap[field]}：`, currentValue);
 
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const record = sleepRecords.find(r => r.date === dateStr);
-    const div = document.createElement("div");
+  if (!newValue) return;
 
-    let bgColor = "#eee"; // 預設灰色
-    let text = `${day}日\n—`;
-
-    if (record) {
-      text = `${day}日\n${record.duration}`;
-      const match = record.duration.match(/(\d+)小時(\d+)分/);
-      if (match) {
-        const hours = parseInt(match[1], 10);
-        const minutes = parseInt(match[2], 10);
-        const total = hours * 60 + minutes;
-
-        if (total >= 480) bgColor = "#c8f7c5";      // 淺綠
-        else if (total >= 360) bgColor = "#fff3b0";  // 淺黃
-        else bgColor = "#f7c5c5";                    // 淺紅
-      }
-    }
-
-    div.textContent = text;
-    div.style.backgroundColor = bgColor;
-    grid.appendChild(div);
+  if (field === "date" && /^\d{4}-\d{2}-\d{2}$/.test(newValue)) {
+    sleepRecords[index].date = newValue;
+  } else if ((field === "sleep" || field === "wake") && /^\d{2}:\d{2}$/.test(newValue)) {
+    sleepRecords[index][field] = newValue;
+  } else {
+    alert("❌ 格式錯誤！");
+    return;
   }
+
+  const sleep = new Date(`${sleepRecords[index].date}T${sleepRecords[index].sleep}`);
+  const wake = new Date(`${sleepRecords[index].date}T${sleepRecords[index].wake}`);
+  if (wake < sleep) wake.setDate(wake.getDate() + 1);
+  sleepRecords[index].duration = calcDuration(sleep, wake);
+
+  saveRecords();
 }
 
-function saveRecords() {
-  localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
-  renderTable();
-  renderStats();
-  renderCalendar();
-  renderHistoryTable();
-}
 function startSleep() {
   currentSleepStart = new Date();
   localStorage.setItem("currentSleepStart", currentSleepStart.toISOString());
@@ -354,112 +355,41 @@ function addManualRecord() {
   saveRecords();
   log(`✅ 手動新增紀錄：${date} ${sleep} → ${wake}`);
 }
+function renderCalendar() {
+  const grid = document.getElementById("calendarGrid");
+  grid.innerHTML = "";
 
-function renderTable() {
-  const tbody = document.getElementById("sleepTableBody");
-  tbody.innerHTML = "";
-  const sorted = [...sleepRecords].sort((a, b) => new Date(b.date) - new Date(a.date));
-  sorted.forEach((r, i) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${r.date}</td>
-      <td onclick="editTime(${i}, 'sleep')">${r.sleep}</td>
-      <td onclick="editTime(${i}, 'wake')">${r.wake}</td>
-      <td>${r.duration}</td>
-      <td><button onclick="deleteRecord(${i})">🗑</button></td>
-    `;
-    tbody.appendChild(row);
-  });
-}
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-function renderHistoryTable() {
-  const tbody = document.getElementById("historyTableBody");
-  tbody.innerHTML = "";
-  sleepRecords.forEach((r, i) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td><button onclick="deleteRecord(${i})">🗑</button></td>
-      <td>${r.date}</td>
-      <td>${r.sleep}</td>
-      <td>${r.wake}</td>
-      <td>${r.duration}</td>
-    `;
-    tbody.appendChild(row);
-  });
-}
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const record = sleepRecords.find(r => r.date === dateStr);
+    const div = document.createElement("div");
 
-function editTime(index, field) {
-  const newTime = prompt(`請輸入新的 ${field === "sleep" ? "睡覺" : "起床"}時間 (HH:mm)：`, sleepRecords[index][field]);
-  if (newTime && /^\d{2}:\d{2}$/.test(newTime)) {
-    sleepRecords[index][field] = newTime;
-    const sleep = new Date(`${sleepRecords[index].date}T${sleepRecords[index].sleep}`);
-    const wake = new Date(`${sleepRecords[index].date}T${sleepRecords[index].wake}`);
-    if (wake < sleep) wake.setDate(wake.getDate() + 1);
-    sleepRecords[index].duration = calcDuration(sleep, wake);
-    saveRecords();
-  }
-}
+    let bgColor = "#eee";
+    let text = `${day}日\n—`;
 
-function deleteRecord(index) {
-  if (confirm("確定要刪除這筆紀錄嗎？")) {
-    sleepRecords.splice(index, 1);
-    saveRecords();
-  }
-}
-function deleteSelectedHistory() {
-  const confirmDelete = confirm("確定要刪除所有紀錄嗎？此操作無法復原！");
-  if (confirmDelete) {
-    sleepRecords = [];
-    saveRecords();
-  }
-}
+    if (record) {
+      text = `${day}日\n${record.duration}`;
+      const match = record.duration.match(/(\d+)小時(\d+)分/);
+      if (match) {
+        const hours = parseInt(match[1], 10);
+        const minutes = parseInt(match[2], 10);
+        const total = hours * 60 + minutes;
 
-function exportHistoryCSV() {
-  let csv = "日期,睡覺時間,起床時間,睡眠時數\n";
-  sleepRecords.forEach(r => {
-    csv += `${r.date},${r.sleep},${r.wake},${r.duration}\n`;
-  });
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "sleep_history.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportAllData() {
-  const blob = new Blob([JSON.stringify(sleepRecords, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "sleep_backup.json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function handleBackupFile(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const data = JSON.parse(e.target.result);
-      if (Array.isArray(data)) {
-        const confirmRestore = confirm("⚠️ 是否覆蓋現有紀錄並還原備份？此操作無法復原！");
-        if (confirmRestore) {
-          sleepRecords = data;
-          saveRecords();
-          alert("✅ 備份已還原！");
-        }
-      } else {
-        alert("❌ 格式錯誤！");
+        if (total >= 480) bgColor = "#c8f7c5";
+        else if (total >= 360) bgColor = "#fff3b0";
+        else bgColor = "#f7c5c5";
       }
-    } catch {
-      alert("❌ 無法解析備份檔！");
     }
-  };
-  reader.readAsText(file);
+
+    div.textContent = text;
+    div.style.backgroundColor = bgColor;
+    grid.appendChild(div);
+  }
 }
 
 function renderStats() {
@@ -521,6 +451,94 @@ function renderStats() {
   statsText += `\n🧠 睡眠品質分布：🟢${good} 🟡${ok} 🔴${poor}`;
   document.getElementById("sleepStats").textContent = statsText;
 }
+
+function renderHistoryTable() {
+  const tbody = document.getElementById("historyTableBody");
+  tbody.innerHTML = "";
+  sleepRecords.forEach((r, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><button onclick="deleteRecord(${i})">🗑</button></td>
+      <td>${r.date}</td>
+      <td>${r.sleep}</td>
+      <td>${r.wake}</td>
+      <td>${r.duration}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function deleteRecord(index) {
+  if (confirm("確定要刪除這筆紀錄嗎？")) {
+    sleepRecords.splice(index, 1);
+    saveRecords();
+  }
+}
+
+function deleteSelectedHistory() {
+  const confirmDelete = confirm("確定要刪除所有紀錄嗎？此操作無法復原！");
+  if (confirmDelete) {
+    sleepRecords = [];
+    saveRecords();
+  }
+}
+
+function exportHistoryCSV() {
+  let csv = "日期,睡覺時間,起床時間,睡眠時數\n";
+  sleepRecords.forEach(r => {
+    csv += `${r.date},${r.sleep},${r.wake},${r.duration}\n`;
+  });
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sleep_history.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportAllData() {
+  const blob = new Blob([JSON.stringify(sleepRecords, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sleep_backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function handleBackupFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data)) {
+        const confirmRestore = confirm("⚠️ 是否覆蓋現有紀錄並還原備份？此操作無法復原！");
+        if (confirmRestore) {
+          sleepRecords = data;
+          saveRecords();
+          alert("✅ 備份已還原！");
+        }
+      } else {
+        alert("❌ 格式錯誤！");
+      }
+    } catch {
+      alert("❌ 無法解析備份檔！");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function saveRecords() {
+  localStorage.setItem("sleepRecords", JSON.stringify(sleepRecords));
+  renderTable();
+  renderStats();
+  renderCalendar();
+  renderHistoryTable();
+}
+
 const quotes = [
   "🌌 星星之所以閃爍，是因為有人正在仰望。",
   "🦊 最重要的事，用眼睛是看不見的。",
@@ -557,7 +575,6 @@ window.onload = () => {
   renderCalendar();
   renderHistoryTable();
 };
-
-  </script>
+</script>
 </body>
 </html>
