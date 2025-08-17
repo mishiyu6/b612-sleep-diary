@@ -7,13 +7,6 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon-192.png" type="image/png">
   <meta name="theme-color" content="#3d3d99">
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(() => console.log("✅ Service Worker 已註冊"))
-        .catch(err => console.error("❌ Service Worker 註冊失敗", err));
-    }
-  </script>
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -100,6 +93,34 @@
       color: #ffd3e0;
       white-space: pre-line;
     }
+    #editModal {
+      display: none;
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      color: #333;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+    #saveToast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #ffd3e0;
+      color: #333;
+      padding: 12px 20px;
+      border-radius: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      font-size: 1em;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+      z-index: 9999;
+    }
     @media (max-width: 600px) {
       body {
         padding: 10px;
@@ -124,6 +145,7 @@
   <h1>🌙 B612 睡眠日記</h1>
   <p class="quote" id="quoteDisplay">🦊 星語載入中...</p>
 
+  <!-- 功能按鈕 -->
   <button onclick="startSleep()">🪐 小王子去旅行</button>
   <button onclick="endSleep()">🌞 他回到星球</button>
   <button onclick="exportAllData()">📦 匯出備份 (JSON)</button>
@@ -136,6 +158,8 @@
   </label>
 
   <div id="log"></div>
+
+  <!-- 睡眠紀錄表格 -->
   <table>
     <thead>
       <tr>
@@ -143,6 +167,7 @@
         <th>🌙 睡覺時間</th>
         <th>🌞 起床時間</th>
         <th>🪐 睡眠時數</th>
+        <th>✏️ 編輯</th>
         <th>🗑 刪除</th>
       </tr>
     </thead>
@@ -151,10 +176,12 @@
 
   <div id="sleepStats"></div>
 
+  <!-- 歷史紀錄 -->
   <h2 style="margin-top:40px;">📚 歷史睡眠時間</h2>
   <table>
     <thead>
       <tr>
+        <th>✏️ 編輯</th>
         <th>🗑 刪除</th>
         <th>📅 日期</th>
         <th>🌙 睡覺時間</th>
@@ -167,6 +194,7 @@
   <button onclick="deleteSelectedHistory()">🧹 刪除選取紀錄</button>
   <button onclick="exportHistoryCSV()">📄 匯出歷史紀錄 (CSV)</button>
 
+  <!-- 手動新增 -->
   <div id="manualEntry">
     <h2>✍️ 手動新增睡眠紀錄</h2>
     <input type="date" id="manualDate">
@@ -175,13 +203,28 @@
     <button onclick="addManualRecord()">➕ 新增紀錄</button>
   </div>
 
+  <!-- 月曆 -->
   <div id="calendar">
     <h2>📅 本月睡眠一覽</h2>
     <div id="calendarGrid"></div>
   </div>
 
-<script>
-let sleepRecords = JSON.parse(localStorage.getItem("sleepRecords") || "[]");
+  <!-- 編輯視窗 -->
+  <div id="editModal">
+    <h3>📝 編輯睡眠紀錄</h3>
+    <input type="date" id="editDate"><br>
+    <input type="time" id="editSleep"><br>
+    <input type="time" id="editWake"><br>
+    <button onclick="saveEdit()">💾 儲存</button>
+    <button onclick="closeEditModal()">❌ 取消</button>
+  </div>
+
+  <!-- 儲存提示 -->
+  <div id="saveToast">✅ 已儲存紀錄！</div>
+
+  <!-- JavaScript -->
+  <script>
+ let sleepRecords = JSON.parse(localStorage.getItem("sleepRecords") || "[]");
 let currentSleepStart = null;
 
 // 嘗試恢復跨日睡眠時間
@@ -514,6 +557,7 @@ window.onload = () => {
   renderCalendar();
   renderHistoryTable();
 };
-</script>
+
+  </script>
 </body>
 </html>
