@@ -153,8 +153,9 @@
   <!-- 📊 睡眠統計區：平均、最長、最短、品質分布 -->
   <div id="sleepStats"></div>
   <!-- 📚 歷史紀錄區塊：完整列出所有紀錄 -->
+<button onclick="toggleHistory()" id="toggleHistoryBtn">📚 顯示/隱藏歷史紀錄</button>
   <h2 style="margin-top:40px;">📚 歷史睡眠時間</h2>
-  <table>
+<table id="historyTable">
     <thead>
       <tr>
         <th>🗑 刪除</th>
@@ -208,6 +209,18 @@
       return date.toTimeString().slice(0, 5);
     }
 
+function toggleHistory() {
+  const table = document.getElementById("historyTable");
+  const btn = document.getElementById("toggleHistoryBtn");
+
+  if (table.style.display === "none") {
+    table.style.display = "table";
+    btn.textContent = "📚 隱藏歷史紀錄";
+  } else {
+    table.style.display = "none";
+    btn.textContent = "📚 顯示歷史紀錄";
+  }
+}
     // ⏱ 睡眠時數計算
     function calcDuration(sleep, wake) {
       let diffMs = wake - sleep;
@@ -428,21 +441,25 @@
     }
 
     // 📚 渲染歷史紀錄表格
-    function renderHistoryTable() {
-      const tbody = document.getElementById("historyTableBody");
-      tbody.innerHTML = "";
-      sleepRecords.forEach((r, i) => {
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td><button onclick="deleteRecord(${i})">🗑</button></td>
-          <td>${r.date}</td>
-          <td>${r.sleep}</td>
-          <td>${r.wake}</td>
-          <td>${r.duration}</td>
-        `;
-        tbody.appendChild(row);
-      });
-    }
+  function renderHistoryTable() {
+  const tbody = document.getElementById("historyTableBody");
+  tbody.innerHTML = "";
+
+  // 日期新到舊排序
+  const sorted = [...sleepRecords].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  sorted.forEach((r, i) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><button onclick="deleteRecord(${i})">🗑</button></td>
+      <td>${r.date}</td>
+      <td>${r.sleep}</td>
+      <td>${r.wake}</td>
+      <td>${r.duration}</td>
+    `;
+    tbody.appendChild(row);
+  });
+}
     // 🗑 刪除單筆紀錄
     function deleteRecord(index) {
       if (confirm("確定要刪除這筆紀錄嗎？")) {
@@ -562,4 +579,3 @@
   </script>
 </body>
 </html>
-
